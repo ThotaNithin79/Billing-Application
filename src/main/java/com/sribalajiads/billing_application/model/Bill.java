@@ -82,4 +82,8 @@ public class Bill {
     @LastModifiedDate
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    // --- NEW ATTRIBUTE FOR COMMUNICATION ---
+    @Column(columnDefinition = "TEXT")
+    private String remarks; // Holds messages from the user performing the action
 }
