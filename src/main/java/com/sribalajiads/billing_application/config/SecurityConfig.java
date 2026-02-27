@@ -1,10 +1,9 @@
 package com.sribalajiads.billing_application.config;
 
-// --- THESE TWO IMPORTS FIX THE ERROR ---
 import com.sribalajiads.billing_application.security.AuthTokenFilter;
 import com.sribalajiads.billing_application.security.services.UserDetailsServiceImpl;
-
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -17,6 +16,12 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.Arrays;
+import java.util.List;
 
 @Configuration
 @EnableMethodSecurity
@@ -25,9 +30,13 @@ public class SecurityConfig {
     @Autowired
     UserDetailsServiceImpl userDetailsService;
 
+    // 1. READS THE IP ADDRESSES FROM application.properties
+    @Value("${app.cors.allowed-origins}")
+    private List<String> allowedOrigins;
+
     @Bean
     public AuthTokenFilter authenticationJwtTokenFilter() {
-        return new AuthTokenFilter(); // Now it knows exactly where this class is!
+        return new AuthTokenFilter();
     }
 
     @Bean
@@ -47,14 +56,36 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
+    // 2. DYNAMIC CORS CONFIGURATION BEAN
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+
+        // Sets the allowed frontend IPs dynamically
+        configuration.setAllowedOrigins(allowedOrigins);
+
+        // Allow all standard HTTP methods
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+
+        // Allow necessary headers including the JWT Authorization header
+        configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "Accept"));
+        configuration.setAllowCredentials(true);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration); // Apply to all endpoints
+        return source;
+    }
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        http.csrf(csrf -> csrf.disable())
+        http
+                .cors(cors -> cors.configurationSource(corsConfigurationSource())) // 3. ACTIVATE GLOBAL CORS
+                .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth ->
-                        auth.requestMatchers("/api/auth/**").permitAll() // Login is public
-                                .requestMatchers("/api/admin/**").hasRole("ADMIN") // Admin secured
-                                .anyRequest().authenticated() // Everything else requires a token
+                        auth.requestMatchers("/api/auth/**").permitAll()
+                                .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                                .anyRequest().authenticated()
                 );
 
         http.authenticationProvider(authenticationProvider());
